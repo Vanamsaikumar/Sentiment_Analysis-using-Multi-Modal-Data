@@ -1,0 +1,280 @@
+import csv
+import cv2
+import matplotlib.pyplot as plt
+import nltk
+import numpy as np
+from deepface import DeepFace
+from keras.models import load_model
+from keras.preprocessing import image
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from tensorflow.keras.utils import img_to_array
+from time import sleep
+
+nltk.download('vader_lexicon')
+
+# Initialize the sentiment analyzer
+sid = SentimentIntensityAnalyzer()
+
+# Display options for the user to choose from
+print("Please choose one of the following options:")
+print("1. Sentiment analysis on user input")
+print("2. Sentiment analysis on Amazon product reviews")
+print("3. Facial emotion detection on image")
+print("4. Real-time facial emotion detection from webcam feed")
+print("5. speech to text")
+print("6. audio to text")
+option = input("Enter option number: ")
+
+if option == "1":
+    # Perform sentiment analysis on user input
+    user_input = input("Enter your Text Here: >>: ")
+    score = sid.polarity_scores(user_input)
+    print(score)
+    if score["neg"] != 0:
+        print("Negative")
+    else:
+        print("Positive")
+
+elif option == "2":
+    # Perform sentiment analysis on Amazon product reviews
+
+    # Ask the user for the input file path
+    input_path = input("Enter the input file path: ")
+
+    # Ask the user for the output file path
+    output_path = input("Enter the output file path: ")
+
+    # Open the input and output CSV files
+    with open(input_path, 'r') as input_file, open(output_path, 'w', newline='') as output_file:
+        # Create CSV reader and writer objects
+        reader = csv.reader(input_file)
+        writer = csv.writer(output_file)
+
+        # Write header row to output CSV file
+        writer.writerow(['text', 'sentiment'])
+
+        # Analyze the sentiment of each review and write the result to output CSV file
+        for row in reader:
+            text = row[0]
+            scores = sid.polarity_scores(text)
+            sentiment = 'positive' if scores['pos'] > scores['neg'] else 'negative' if scores['neg'] > scores['pos'] else 'neutral'
+            writer.writerow([text, sentiment])
+
+
+elif option == "3":
+    # Perform facial emotion detection on image
+    # Get the input image path from the user
+    input_path = input("Enter the path to the input image: ")
+
+    # Read the input image
+    img_path = cv2.imread(input_path)
+
+    # Analyze the input image
+    result = DeepFace.analyze(img_path, actions=["emotion"])
+
+    # Extract the predicted emotion label
+    emotion = result[0]["dominant_emotion"]
+
+    # Print the predicted emotion label
+    print("Predicted emotion:", emotion)
+
+    # Detect and draw bounding box around the face in the image
+    faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    gray = cv2.cvtColor(img_path, cv2.COLOR_BGR2GRAY)
+    faces = faceCascade.detectMultiScale(gray, 1.1, 4)
+    for (x, y, w, h) in faces:
+        cv2.rectangle(img_path, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+    # Add the predicted emotion label to the image
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img_path, emotion, (0, 50), font, 1, (0, 0, 255), 2, cv2.LINE_4)
+
+    # Display the image with the bounding box and predicted emotion label
+    plt.imshow(cv2.cvtColor(img_path, cv2.COLOR_BGR2RGB))
+    plt.show() 
+
+
+
+elif option == "4":
+    from keras.models import load_model
+    from time import sleep
+    from tensorflow.keras.utils import img_to_array
+    from keras.preprocessing import image
+
+    import cv2
+    import numpy as np
+
+    face_classifier = cv2.CascadeClassifier(r'D:\Emotion_Detection_CNN-main\haarcascade_frontalface_default.xml')
+    classifier =load_model(r'D:\Emotion_Detection_CNN-main\model.h5')
+    emotion_labels = ['Angry','Disgust','Fear','Happy','Neutral', 'Sad', 'Surprise']
+    cap = cv2.VideoCapture(0)
+
+    while True:
+        _, frame = cap.read()
+        labels = []
+        gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        faces = face_classifier.detectMultiScale(gray)
+
+        for (x,y,w,h) in faces:
+
+            cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,255),2)
+            roi_gray = gray[y:y+h,x:x+w]
+            roi_gray = cv2.resize(roi_gray,(48,48),interpolation=cv2.INTER_AREA)
+
+            if np.sum([roi_gray])!=0:
+                roi = roi_gray.astype('float')/255.0
+                roi = img_to_array(roi)
+                roi = np.expand_dims(roi,axis=0)
+
+                prediction = classifier.predict(roi)[0]
+                label=emotion_labels[prediction.argmax()]
+                label_position = (x,y)
+                cv2.putText(frame,label,label_position,cv2.FONT_HERSHEY_SIMPLEX,1,(0,255,0),2)
+            else:
+                cv2.putText(frame,'No Faces',(30,80),cv2.FONT_HERSHEY_SIMPLEX,1,(0,255,0),2)
+        cv2.imshow('Emotion Detector',frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+elif option == "5":
+    import speech_recognition as sr
+    from textblob import TextBlob
+
+    # create a recognizer instance
+    r = sr.Recognizer()
+
+    # use microphone as audio source
+    with sr.Microphone() as mic:
+        language = input("Choose language: \n 1. Telugu \n 2. Hindi \n 3. English\n")
+        if language == "1":
+            print("Say something in Telugu...")
+            r.energy_threshold = 4000  # Adjust this value if needed
+            audio_data = r.listen(mic)
+        elif language == "2":
+            print("Say something in Hindi...")
+            r.energy_threshold = 4000  # Adjust this value if needed
+            audio_data = r.listen(mic)
+        elif language == "3":
+            print("Say something in English...")
+            audio_data = r.listen(mic)
+
+    # perform speech recognition
+    try:
+        if language == "1":
+            text = r.recognize_google(audio_data, language="te-IN")
+        elif language == "2":
+            text = r.recognize_google(audio_data, language="hi-IN")
+        elif language == "3":
+            text = r.recognize_google(audio_data, language="en-US")
+
+        print("Recognized Text: " + text)
+
+        # perform sentiment analysis
+        blob = TextBlob(text)
+        sentiment = blob.sentiment.polarity
+        print("Sentiment Score: " + str(sentiment))
+
+    except sr.UnknownValueError:
+        print("Speech Recognition could not understand audio")
+    except sr.RequestError as e:
+        print("Could not request results from Speech Recognition service; {0}".format(e))
+
+elif option == "6":
+    import speech_recognition as sr
+
+    # create a recognizer instance
+    r = sr.Recognizer()
+
+    # use audio file as audio source
+    audio_file = input("Enter the path to the audio file: ")
+    language = input("Choose language: \n 1. Telugu \n 2. Hindi \n 3. English\n")
+    with sr.AudioFile(audio_file) as source:
+        if language == "1":
+            print("Transcribing Telugu audio...")
+            audio_data = r.record(source)
+        elif language == "2":
+            print("Transcribing Hindi audio...")
+            audio_data = r.record(source)
+        elif language == "3":
+            print("Transcribing English audio...")
+            audio_data = r.record(source)
+
+    # perform speech recognition
+    try:
+        if language == "1":
+            text = r.recognize_google(audio_data, language="te-IN")
+        elif language == "2":
+            text = r.recognize_google(audio_data, language="hi-IN")
+        elif language == "3":
+            text = r.recognize_google(audio_data, language="en-US")
+
+        print("Recognized Text: " + text)
+
+    except sr.UnknownValueError:
+        print("Speech Recognition could not understand audio")
+    except sr.RequestError as e:
+        print("Could not request results from Speech Recognition service; {0}".format(e))
+
+
+import openpyxl
+import matplotlib.pyplot as plt
+
+# Load the ratings from the Excel file
+workbook = openpyxl.load_workbook('C:/Users/HP/Desktop/mini/ratings.xlsx')
+sheet = workbook.active
+ratings = [cell.value for cell in sheet['B'][1:]]
+workbook.close()
+
+# Ask the user to rate their experience on a scale of 1 to 5
+rating = None
+while rating not in [1, 2, 3, 4, 5]:
+    try:
+        rating = int(input("Please rate your experience (1-5): "))
+    except ValueError:
+        print("Invalid input. Please enter a number between 1 and 5.")
+
+# Ask the user to leave feedback or comments
+feedback = input("Please leave any feedback or comments: ")
+
+# Save the rating and feedback to an Excel file
+workbook = openpyxl.load_workbook('C:/Users/HP/Desktop/mini/ratings.xlsx')
+sheet = workbook.active
+next_row = len(sheet['A']) + 1
+sheet.cell(row=next_row, column=1).value = next_row - 1
+sheet.cell(row=next_row, column=2).value = rating
+sheet.cell(row=next_row, column=3).value = feedback
+workbook.save('C:/Users/HP/Desktop/mini/ratings.xlsx')
+workbook.close()
+
+print(f"Thank you for your rating and feedback. Your rating: {rating}/5.")
+
+
+
+
+import random
+
+def get_random_book():
+    books = ["The Alchemist", "To Kill a Mockingbird", "1984", "Pride and Prejudice", "The Great Gatsby", "One Hundred Years of Solitude", "The Catcher in the Rye", "The Picture of Dorian Gray", "Brave New World", "Animal Farm"]
+    return random.choice(books)
+
+def get_movie_recommendation():
+    movies = ["The Shawshank Redemption", "The Godfather", "The Dark Knight", "12 Angry Men", "Schindler's List", "Forrest Gump", "The Lord of the Rings: The Fellowship of the Ring", "The Matrix", "Goodfellas", "Fight Club"]
+    return random.choice(movies)
+
+def get_book_recommendation():
+    print("Based on your interest in movies, we recommend the following book:")
+    book = get_random_book()
+    print("- " + book)
+
+def get_user_choice():
+    user_choice = input("Would you like a movie and book recommendation to change your mood? ")
+    if user_choice.lower() == "yes":
+        print("Our recommendation is: " + get_movie_recommendation())
+        get_book_recommendation()
+    else:
+        print("No problem, have a nice day!")
+
+get_user_choice()
